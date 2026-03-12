@@ -245,7 +245,7 @@ Erreurs corrigées : ${errorsCorrected}
 Erreurs restantes : ${errorsUnfixable}`;
 
 	log(summary);
-	createLogSheet(logData, isDryRun);
+	createLogSheet(logData, isDryRun, summary);
 	SpreadsheetApp.getUi().alert(`${modeLabel} ${summary}`);
 }
 
@@ -253,8 +253,9 @@ Erreurs restantes : ${errorsUnfixable}`;
  * Crée une feuille de logs dans le classeur actif.
  * @param {Array<Array<string>>} data
  * @param {boolean} isDryRun
+ * @param {string} summary
  */
-function createLogSheet(data, isDryRun)
+function createLogSheet(data, isDryRun, summary)
 {
 	const ss = SpreadsheetApp.getActiveSpreadsheet();
 	const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss');
@@ -262,18 +263,26 @@ function createLogSheet(data, isDryRun)
 	const sheetName = `Logs_${mode}_${timestamp}`;
 	
 	const sheet = ss.insertSheet(sheetName);
-	const range = sheet.getRange(1, 1, data.length, data[0].length);
+	
+	// Préparation du résumé en haut
+	const summaryRows = summary.split('\n').map(line => [line]);
+	sheet.getRange(1, 1, summaryRows.length, 1).setValues(summaryRows).setFontWeight('bold');
+	
+	// Injection des données de logs après le résumé (+ 1 ligne vide)
+	const startRow = summaryRows.length + 2;
+	const range = sheet.getRange(startRow, 1, data.length, data[0].length);
 	range.setValues(data);
 
-	// Mise en forme
-	sheet.getRange(1, 1, 1, data[0].length).setFontWeight('bold').setBackground('#f3f3f3');
-	sheet.setFrozenRows(1);
+	// Mise en forme de l'en-tête du tableau
+	sheet.getRange(startRow, 1, 1, data[0].length).setFontWeight('bold').setBackground('#f3f3f3');
+	sheet.setFrozenRows(startRow);
 	sheet.autoResizeColumns(1, data[0].length);
 
-	// Réduction de la taille de la feuille pour correspondre aux logs
-	if (sheet.getMaxRows() > data.length)
+	// Réduction de la taille de la feuille pour correspondre aux données
+	const totalRowsUsed = startRow + data.length - 1;
+	if (sheet.getMaxRows() > totalRowsUsed)
 	{
-		sheet.deleteRows(data.length + 1, sheet.getMaxRows() - data.length);
+		sheet.deleteRows(totalRowsUsed + 1, sheet.getMaxRows() - totalRowsUsed);
 	}
 	if (sheet.getMaxColumns() > data[0].length)
 	{
