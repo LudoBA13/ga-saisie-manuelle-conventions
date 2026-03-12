@@ -71,9 +71,8 @@ const FIX_CONFIG = {
 			const originalStrValue = strValue;
 			let modified = false;
 
-			// Attempt correction if format is DDMMYY or DDMMYYYY (missing slashes)
-			// User regex: ^([0-9]{1,2})([0-9]{1,2})([0-9]{4}|[0-9]{2})$
-			const dateRegex = /^([0-9]{1,2})([0-9]{1,2})([0-9]{4}|[0-9]{2})$/;
+			// Attempt correction if format is D/MYYYY or DD/MMYYYY (missing the second slash)
+			const dateRegex = /^([0-9]{1,2})\/([0-9]{1,2})([0-9]{4}|[0-9]{2})$/;
 			const match = strValue.match(dateRegex);
 			if (match)
 			{
