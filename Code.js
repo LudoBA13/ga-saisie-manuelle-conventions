@@ -44,6 +44,82 @@ const FIX_CONFIG = {
 
 			return { error: `La valeur "${strValue}" ne correspond pas à un format d'entier valide.` };
 		}
+	},
+	'Saisie!C72': {
+		name: 'Date de signature',
+		fixer: (value) =>
+		{
+			let strValue;
+			if (value instanceof Date)
+			{
+				strValue = Utilities.formatDate(value, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+			}
+			else
+			{
+				strValue = String(value || '').trim();
+			}
+
+			if (strValue === '')
+			{
+				return { error: 'La valeur est vide.' };
+			}
+
+			let modified = false;
+			const originalInput = value;
+
+			// Tentative de correction si le format est DDMMYY ou DDMMYYYY (sans les slashs)
+			// La regex demandée par l'utilisateur : ^([0-9]{1,2})([0-9]{1,2})([0-9]{4}|[0-9]{2})$
+			const dateRegex = /^([0-9]{1,2})([0-9]{1,2})([0-9]{4}|[0-9]{2})$/;
+			const match = strValue.match(dateRegex);
+			if (match)
+			{
+				strValue = `${match[1]}/${match[2]}/${match[3]}`;
+				modified = true;
+			}
+
+			// Analyse de la date
+			// Note: Google Apps Script / JS Date peut être capricieux avec le format DD/MM/YYYY.
+			// On va parser manuellement pour être sûr.
+			const parts = strValue.split(/[\/\-\.]/);
+			if (parts.length !== 3)
+			{
+				return { error: `Format de date invalide : "${strValue}". Attendu : DD/MM/YYYY.` };
+			}
+
+			let day = parseInt(parts[0], 10);
+			let month = parseInt(parts[1], 10) - 1; // 0-indexed
+			let year = parseInt(parts[2], 10);
+
+			if (year < 100)
+			{
+				year += 2000;
+			}
+
+			const date = new Date(year, month, day);
+			const now = new Date();
+			const minDate = new Date(2024, 0, 1);
+
+			// Vérification de la validité réelle de la date (ex: pas de 31 février)
+			if (date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day)
+			{
+				return { error: `La date "${strValue}" est calendairement invalide.` };
+			}
+
+			if (date < minDate || date > now)
+			{
+				return { error: `La date "${strValue}" est hors limites (doit être entre 01/01/2024 et aujourd'hui).` };
+			}
+
+			const formattedDate = Utilities.formatDate(date, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+			
+			// Si la valeur a été reformattée ou corrigée par regex
+			if (modified || formattedDate !== originalValue)
+			{
+				return { success: true, fixedValue: formattedDate, modified: true };
+			}
+
+			return { success: true, fixedValue: formattedDate, modified: false };
+		}
 	}
 };
 
@@ -99,8 +175,8 @@ function processClericalErrors(isDryRun)
 	console.info(`${modeLabel} Début du traitement des erreurs cléricales.`);
 
 	let filesProcessed = 0;
-	let totalFixes = 0;
-	let totalErrors = 0;
+	let errorsCorrected = 0;
+	let errorsUnfixable = 0;
 
 	forEachSpreadsheetInFolder((ss, ssName) => 
 	{
@@ -116,7 +192,7 @@ function processClericalErrors(isDryRun)
 			if (!range)
 			{
 				console.error(`${modeLabel} [${ssName}] ❌ Impossible d'accéder à "${address}"`);
-				totalErrors++;
+				errorsUnfixable++;
 				continue;
 			}
 
@@ -125,18 +201,19 @@ function processClericalErrors(isDryRun)
 
 			if (result.error)
 			{
-				console.error(`${modeLabel} [${ssName}] ${config.name} : ❌ ${result.error}`);
-				totalErrors++;
+				console.error(`${modeLabel} [${ssName}] ${config.name} : ❌ ERREUR NON CORRIGÉE : ${result.error}`);
+				errorsUnfixable++;
 			}
 			else if (result.modified)
 			{
-				console.info(`${modeLabel} [${ssName}] ${config.name} : 🛠 Correction "${oldValue}" -> "${result.fixedValue}"`);
+				const actionLabel = isDryRun ? 'SIMULATION' : 'CORRECTION';
+				console.info(`${modeLabel} [${ssName}] ${config.name} : ✅ ${actionLabel} de "${oldValue}" vers "${result.fixedValue}"`);
 				if (!isDryRun)
 				{
 					range.setValue(result.fixedValue);
 					fileHasChanges = true;
 				}
-				totalFixes++;
+				errorsCorrected++;
 			}
 		}
 
@@ -146,8 +223,15 @@ function processClericalErrors(isDryRun)
 		}
 	});
 
-	console.info(`${modeLabel} Terminé. Fichiers : ${filesProcessed}, Corrections : ${totalFixes}, Erreurs : ${totalErrors}`);
-	SpreadsheetApp.getUi().alert(`${modeLabel} Terminé.\nFichiers : ${filesProcessed}\nCorrections : ${totalFixes}\nErreurs : ${totalErrors}`);
+	const totalErrorsFound = errorsCorrected + errorsUnfixable;
+	const summary = `Traitement terminé.
+Fichiers parcourus : ${filesProcessed}
+Erreurs trouvées : ${totalErrorsFound}
+Erreurs corrigées : ${errorsCorrected}
+Erreurs restantes : ${errorsUnfixable}`;
+
+	console.info(`${modeLabel} ${summary}`);
+	SpreadsheetApp.getUi().alert(`${modeLabel} ${summary}`);
 }
 
 function rechargerDonneesConventions()
