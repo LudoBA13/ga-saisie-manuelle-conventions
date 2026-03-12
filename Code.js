@@ -4,32 +4,36 @@ function onOpen()
 {
 	SpreadsheetApp.getUi()
 		.createMenu('Conventions')
-		.addItem('Recharger les données des conventions', 'rechargerDonneesConventions')
+		.addItem('Reload convention data', 'rechargerDonneesConventions')
 		.addSeparator()
-		.addItem('Simuler la correction des erreurs (Dry Run)', 'dryRunFixClericalErrors')
-		.addItem('Appliquer la correction des erreurs', 'applyFixClericalErrors')
+		.addItem('Simulate clerical error fix (Dry Run)', 'dryRunFixClericalErrors')
+		.addItem('Apply clerical error fix', 'applyFixClericalErrors')
 		.addToUi();
 }
 
 /**
- * Configuration des corrections automatiques.
+ * Configuration for automatic fixes.
+ * Each key is a cell address (Sheet!A1).
+ * Each value is an object with a name and a 'fixer' function.
  */
 const FIX_CONFIG = {
 	'Saisie!C2': {
-		name: 'Numéro de convention',
+		name: 'Convention Number',
 		fixer: (value) =>
 		{
 			const strValue = String(value || '').trim();
 			if (strValue === '')
 			{
-				return { error: 'La valeur est vide.' };
+				return { error: 'Value is empty.' };
 			}
 
+			// If it's already a pure integer
 			if (/^\d+$/.test(strValue))
 			{
 				return { success: true, fixedValue: strValue, modified: false };
 			}
 
+			// Apply RE2 regex: ^[Bb]*0*([1-9][0-9]+).* -> $1
 			const regex = /^[Bb]*0*([1-9][0-9]+).*/;
 			const match = strValue.match(regex);
 
@@ -42,11 +46,11 @@ const FIX_CONFIG = {
 				}
 			}
 
-			return { error: `La valeur "${strValue}" ne correspond pas à un format d'entier valide.` };
+			return { error: `Value "${strValue}" does not match a valid integer format.` };
 		}
 	},
 	'Saisie!C72': {
-		name: 'Date de signature',
+		name: 'Signature Date',
 		fixer: (value) =>
 		{
 			let strValue;
@@ -61,14 +65,14 @@ const FIX_CONFIG = {
 
 			if (strValue === '')
 			{
-				return { error: 'La valeur est vide.' };
+				return { error: 'Value is empty.' };
 			}
 
 			const originalStrValue = strValue;
 			let modified = false;
 
-			// Tentative de correction si le format est DDMMYY ou DDMMYYYY (sans les slashs)
-			// La regex demandée par l'utilisateur : ^([0-9]{1,2})([0-9]{1,2})([0-9]{4}|[0-9]{2})$
+			// Attempt correction if format is DDMMYY or DDMMYYYY (missing slashes)
+			// User regex: ^([0-9]{1,2})([0-9]{1,2})([0-9]{4}|[0-9]{2})$
 			const dateRegex = /^([0-9]{1,2})([0-9]{1,2})([0-9]{4}|[0-9]{2})$/;
 			const match = strValue.match(dateRegex);
 			if (match)
@@ -77,13 +81,12 @@ const FIX_CONFIG = {
 				modified = true;
 			}
 
-			// Analyse de la date
-			// Note: Google Apps Script / JS Date peut être capricieux avec le format DD/MM/YYYY.
-			// On va parser manuellement pour être sûr.
+			// Parse the date
+			// Note: JS Date can be unreliable with DD/MM/YYYY format, so we parse manually.
 			const parts = strValue.split(/[\/\-\.]/);
 			if (parts.length !== 3)
 			{
-				return { error: `Format de date invalide : "${strValue}". Attendu : DD/MM/YYYY.` };
+				return { error: `Invalid date format: "${strValue}". Expected: DD/MM/YYYY.` };
 			}
 
 			let day = parseInt(parts[0], 10);
@@ -99,20 +102,20 @@ const FIX_CONFIG = {
 			const now = new Date();
 			const minDate = new Date(2024, 0, 1);
 
-			// Vérification de la validité réelle de la date (ex: pas de 31 février)
+			// Verify if the date is actually valid (e.g., no Feb 31st)
 			if (date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day)
 			{
-				return { error: `La date "${strValue}" est calendairement invalide.` };
+				return { error: `Date "${strValue}" is calendrically invalid.` };
 			}
 
 			if (date < minDate || date > now)
 			{
-				return { error: `La date "${strValue}" est hors limites (doit être entre 01/01/2024 et aujourd'hui).` };
+				return { error: `Date "${strValue}" is out of bounds (must be between 01/01/2024 and today).` };
 			}
 
 			const formattedDate = Utilities.formatDate(date, Session.getScriptTimeZone(), 'dd/MM/yyyy');
 			
-			// Si la valeur a été reformattée ou corrigée par regex
+			// If the value was reformatted or fixed via regex
 			if (modified || formattedDate !== originalStrValue)
 			{
 				return { success: true, fixedValue: formattedDate, modified: true };
@@ -124,7 +127,7 @@ const FIX_CONFIG = {
 };
 
 /**
- * Itère sur tous les Google Sheets d'un dossier et exécute un callback pour chacun.
+ * Iterates through all Google Sheets in a folder and executes a callback for each.
  * @param {function(GoogleAppsScript.Spreadsheet.Spreadsheet, string)} callback 
  */
 function forEachSpreadsheetInFolder(callback)
@@ -144,7 +147,7 @@ function forEachSpreadsheetInFolder(callback)
 		}
 		catch (e)
 		{
-			console.error(`❌ Erreur critique sur "${ssName}" : ${e.toString()}`);
+			console.error(`❌ Critical error on "${ssName}": ${e.toString()}`);
 		}
 	}
 }
@@ -159,7 +162,7 @@ function applyFixClericalErrors()
 	const ui = SpreadsheetApp.getUi();
 	const response = ui.alert(
 		'Confirmation',
-		'Êtes-vous sûr de vouloir appliquer les corrections sur TOUS les fichiers ?',
+		'Are you sure you want to apply fixes to ALL files?',
 		ui.ButtonSet.YES_NO
 	);
 
@@ -169,10 +172,14 @@ function applyFixClericalErrors()
 	}
 }
 
+/**
+ * Processes clerical errors across all spreadsheets based on FIX_CONFIG.
+ * @param {boolean} isDryRun If true, does not modify the files.
+ */
 function processClericalErrors(isDryRun)
 {
 	const modeLabel = isDryRun ? '[DRY RUN]' : '[LIVE]';
-	console.info(`${modeLabel} Début du traitement des erreurs cléricales.`);
+	console.info(`${modeLabel} Starting clerical error processing.`);
 
 	let filesProcessed = 0;
 	let errorsCorrected = 0;
@@ -180,7 +187,7 @@ function processClericalErrors(isDryRun)
 
 	forEachSpreadsheetInFolder((ss, ssName) => 
 	{
-		console.info(`${modeLabel} ℹ️ Traitement du fichier : ${ssName}`);
+		console.info(`${modeLabel} ℹ️ Processing file: ${ssName}`);
 		filesProcessed++;
 		let fileHasChanges = false;
 
@@ -191,7 +198,7 @@ function processClericalErrors(isDryRun)
 			
 			if (!range)
 			{
-				console.error(`${modeLabel} [${ssName}] ❌ Impossible d'accéder à "${address}"`);
+				console.error(`${modeLabel} [${ssName}] ❌ Cannot access "${address}"`);
 				errorsUnfixable++;
 				continue;
 			}
@@ -201,13 +208,13 @@ function processClericalErrors(isDryRun)
 
 			if (result.error)
 			{
-				console.error(`${modeLabel} [${ssName}] ${config.name} : ❌ ERREUR NON CORRIGÉE : ${result.error}`);
+				console.error(`${modeLabel} [${ssName}] ${config.name}: ❌ ERROR NOT FIXED: ${result.error}`);
 				errorsUnfixable++;
 			}
 			else if (result.modified)
 			{
-				const actionLabel = isDryRun ? 'SIMULATION' : 'CORRECTION';
-				console.info(`${modeLabel} [${ssName}] ${config.name} : ✅ ${actionLabel} de "${oldValue}" vers "${result.fixedValue}"`);
+				const actionLabel = isDryRun ? 'SIMULATION' : 'FIXED';
+				console.info(`${modeLabel} [${ssName}] ${config.name}: ✅ ${actionLabel} from "${oldValue}" to "${result.fixedValue}"`);
 				if (!isDryRun)
 				{
 					range.setValue(result.fixedValue);
@@ -224,16 +231,19 @@ function processClericalErrors(isDryRun)
 	});
 
 	const totalErrorsFound = errorsCorrected + errorsUnfixable;
-	const summary = `Traitement terminé.
-Fichiers parcourus : ${filesProcessed}
-Erreurs trouvées : ${totalErrorsFound}
-Erreurs corrigées : ${errorsCorrected}
-Erreurs restantes : ${errorsUnfixable}`;
+	const summary = `Processing completed.
+Files scanned: ${filesProcessed}
+Errors found: ${totalErrorsFound}
+Errors fixed: ${errorsCorrected}
+Errors remaining: ${errorsUnfixable}`;
 
 	console.info(`${modeLabel} ${summary}`);
 	SpreadsheetApp.getUi().alert(`${modeLabel} ${summary}`);
 }
 
+/**
+ * Reloads convention data into the 'Data' sheet.
+ */
 function rechargerDonneesConventions()
 {
 	const activeSs = SpreadsheetApp.getActiveSpreadsheet();
@@ -241,21 +251,21 @@ function rechargerDonneesConventions()
 
 	if (!targetSheet)
 	{
-		console.error("❌ Erreur : La feuille 'Data' n'existe pas.");
+		console.error("❌ Error: 'Data' sheet does not exist.");
 		return;
 	}
 
 	const targetHeaders = targetSheet.getRange(1, 1, 1, targetSheet.getLastColumn()).getValues()[0];
-	console.info("ℹ️ Début du rechargement des données.");
+	console.info("ℹ️ Starting data reload.");
 
 	forEachSpreadsheetInFolder((ss, ssName) => 
 	{
-		console.info(`ℹ️ Traitement du fichier : ${ssName}`);
+		console.info(`ℹ️ Processing file: ${ssName}`);
 		const sourceSheet = ss.getSheetByName('Données');
 
 		if (!sourceSheet)
 		{
-			console.warn(`⚠️ Pas de feuille 'Données' dans ${ssName}`);
+			console.warn(`⚠️ No 'Données' sheet in ${ssName}`);
 			return;
 		}
 
@@ -263,7 +273,7 @@ function rechargerDonneesConventions()
 
 		if (JSON.stringify(sourceHeaders) !== JSON.stringify(targetHeaders))
 		{
-			console.error(`❌ En-têtes invalides dans ${ssName}`);
+			console.error(`❌ Invalid headers in ${ssName}`);
 			return;
 		}
 
@@ -272,11 +282,11 @@ function rechargerDonneesConventions()
 		
 		if (isEmpty)
 		{
-			console.error(`❌ Ligne 2 vide dans ${ssName}`);
+			console.error(`❌ Row 2 is empty in ${ssName}`);
 			return;
 		}
 
 		targetSheet.appendRow(sourceDataRow);
-		console.log(`✅ Données importées : ${ssName}`);
+		console.log(`✅ Data imported: ${ssName}`);
 	});
 }
