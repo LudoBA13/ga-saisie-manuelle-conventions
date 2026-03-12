@@ -64,8 +64,8 @@ const FIX_CONFIG = {
 				return { error: 'La valeur est vide.' };
 			}
 
+			const originalStrValue = strValue;
 			let modified = false;
-			const originalInput = value;
 
 			// Tentative de correction si le format est DDMMYY ou DDMMYYYY (sans les slashs)
 			// La regex demandée par l'utilisateur : ^([0-9]{1,2})([0-9]{1,2})([0-9]{4}|[0-9]{2})$
@@ -113,7 +113,7 @@ const FIX_CONFIG = {
 			const formattedDate = Utilities.formatDate(date, Session.getScriptTimeZone(), 'dd/MM/yyyy');
 			
 			// Si la valeur a été reformattée ou corrigée par regex
-			if (modified || formattedDate !== originalValue)
+			if (modified || formattedDate !== originalStrValue)
 			{
 				return { success: true, fixedValue: formattedDate, modified: true };
 			}
