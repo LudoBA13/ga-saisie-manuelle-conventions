@@ -141,7 +141,8 @@ function forEachSpreadsheetInFolder(callback)
 		try
 		{
 			const ss = SpreadsheetApp.open(file);
-			callback(ss, ssName);
+			const ssUrl = ss.getUrl();
+			callback(ss, ssName, ssUrl);
 		}
 		catch (e)
 		{
@@ -192,9 +193,9 @@ function processClericalErrors(isDryRun)
 	let errorsCorrected = 0;
 	let errorsUnfixable = 0;
 
-	forEachSpreadsheetInFolder((ss, ssName) => 
+	forEachSpreadsheetInFolder((ss, ssName, ssUrl) => 
 	{
-		log(`Traitement du fichier`, 'INFO', ssName);
+		log(`Traitement du fichier (${ssUrl})`, 'INFO', ssName);
 		filesProcessed++;
 		let fileHasChanges = false;
 
@@ -307,9 +308,9 @@ function rechargerDonneesConventions()
 	const targetHeaders = targetSheet.getRange(1, 1, 1, targetSheet.getLastColumn()).getValues()[0];
 	console.info("ℹ️ Début du rechargement des données.");
 
-	forEachSpreadsheetInFolder((ss, ssName) => 
+	forEachSpreadsheetInFolder((ss, ssName, ssUrl) => 
 	{
-		console.info(`ℹ️ Traitement du fichier : ${ssName}`);
+		console.info(`ℹ️ Traitement du fichier : ${ssName} (${ssUrl})`);
 		const sourceSheet = ss.getSheetByName('Données');
 
 		if (!sourceSheet)
