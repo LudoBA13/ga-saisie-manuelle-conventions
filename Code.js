@@ -4,7 +4,8 @@ function onOpen()
 {
 	SpreadsheetApp.getUi()
 		.createMenu('Conventions')
-		.addItem('Importer données structures', 'rechargerDonneesConventions')
+		.addItem('Importer les données Structures', 'rechargerDonneesConventions')
+		.addItem('Importer les données Personnes', 'importerDonneesPersonnes')
 		.addSeparator()
 		.addItem('Simuler la correction des erreurs (Dry Run)', 'dryRunFixClericalErrors')
 		.addItem('Appliquer la correction des erreurs', 'applyFixClericalErrors')
@@ -352,4 +353,75 @@ function rechargerDonneesConventions()
 		targetSheet.appendRow(sourceDataRow);
 		console.log(`✅ Données importées : ${ssName}`);
 	});
+}
+
+/**
+ * Parcourt les fichiers, sélectionne les données de la feuille 'Interlocuteurs'
+ * et les copie dans la feuille 'Structures' si 'Prénom Nom' est renseigné.
+ */
+function importerDonneesPersonnes()
+{
+	const activeSs = SpreadsheetApp.getActiveSpreadsheet();
+	const targetSheet = activeSs.getSheetByName('Personnes');
+
+	if (!targetSheet)
+	{
+		console.error("❌ Erreur : La feuille 'Personnes' n'existe pas.");
+		return;
+	}
+
+	console.info("ℹ️ Début de l'importation des données Personnes.");
+
+	let fileCount = 0;
+	forEachSpreadsheetInFolder((ss, ssName, ssUrl) =>
+	{
+		fileCount++;
+		console.info(`ℹ️ [${fileCount}] Traitement du fichier : ${ssName} (${ssUrl})`);
+
+		const saisieSheet = ss.getSheetByName('Saisie');
+		if (!saisieSheet)
+		{
+			console.warn(`⚠️ Pas de feuille 'Saisie' dans ${ssName}`);
+			return;
+		}
+
+		const codeBA = saisieSheet.getRange('C2').getValue();
+		const nomPartenaire = saisieSheet.getRange('C3').getValue();
+		console.log(`DEBUG: Code BA="${codeBA}", Partenaire="${nomPartenaire}"`);
+
+		// Lecture de la plage fixe B11:F26
+		const dataRange = saisieSheet.getRange('B11:F26');
+		const values = dataRange.getValues();
+		console.log(`DEBUG: Plage B11:F26 lue, nombre de lignes: ${values.length}`);
+
+		let rowsFoundInFile = 0;
+		for (let i = 0; i < values.length; i++)
+		{
+			const row = values[i];
+			const prenomNom = row[1]; // L'index 1 correspond à la colonne C dans la plage B:F
+
+			if (prenomNom && String(prenomNom).trim() !== '')
+			{
+				const rowToAppend = [codeBA, nomPartenaire].concat(row);
+				console.log(`DEBUG: Tentative d'ajout pour "${prenomNom}" : ${JSON.stringify(rowToAppend)}`);
+				
+				try
+				{
+					targetSheet.appendRow(rowToAppend);
+					const lastRow = targetSheet.getLastRow();
+					console.info(`✅ Personne importée depuis ${ssName} : ${prenomNom} (Ajoutée à la ligne ${lastRow})`);
+					rowsFoundInFile++;
+				}
+				catch (e)
+				{
+					console.error(`❌ Erreur lors de l'ajout de la ligne pour "${prenomNom}" dans ${ssName} : ${e.toString()}`);
+				}
+			}
+		}
+		
+		console.log(`DEBUG: Fichier "${ssName}" terminé. Lignes ajoutées: ${rowsFoundInFile}`);
+		SpreadsheetApp.flush();
+	});
+	
+	console.info(`ℹ️ Fin de l'importation. Total de fichiers traités: ${fileCount}`);
 }
