@@ -98,7 +98,7 @@ const FIX_CONFIG = {
 			}
 
 			const date = new Date(year, month, day);
-			const now = new Date();
+			const now = new Date;
 			const minDate = new Date(2024, 0, 1);
 
 			// Vérification de la validité réelle de la date
@@ -180,11 +180,18 @@ function processClericalErrors(isDryRun)
 	const modeLabel = isDryRun ? '[DRY RUN]' : '[LIVE]';
 	const logData = [['Horodatage', 'Niveau', 'Fichier', 'Message']];
 	
-	const log = (message, level = 'INFO', fileName = '-') => {
-		const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+	const log = (message, level = 'INFO', fileName = '-') =>
+	{
+		const timestamp = Utilities.formatDate(new Date, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
 		logData.push([timestamp, level, fileName, message]);
-		if (level === 'ERROR') console.error(`${modeLabel} ${fileName !== '-' ? '['+fileName+'] ' : ''}${message}`);
-		else console.info(`${modeLabel} ${fileName !== '-' ? '['+fileName+'] ' : ''}${message}`);
+		if (level === 'ERROR')
+		{
+			console.error(`${modeLabel} ${fileName !== '-' ? '[' + fileName + '] ' : ''}${message}`);
+		}
+		else
+		{
+			console.info(`${modeLabel} ${fileName !== '-' ? '[' + fileName + '] ' : ''}${message}`);
+		}
 	};
 
 	log(`Début du traitement des erreurs cléricales.`);
@@ -259,14 +266,17 @@ Erreurs restantes : ${errorsUnfixable}`;
 function createLogSheet(data, isDryRun, summary)
 {
 	const ss = SpreadsheetApp.getActiveSpreadsheet();
-	const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss');
+	const timestamp = Utilities.formatDate(new Date, Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss');
 	const mode = isDryRun ? 'DRY' : 'LIVE';
 	const sheetName = `Logs_${mode}_${timestamp}`;
 	
 	const sheet = ss.insertSheet(sheetName);
 	
 	// Préparation du résumé en haut
-	const summaryRows = summary.split('\n').map(line => [line]);
+	const summaryRows = summary.split('\n').map(line =>
+	{
+		return [line];
+	});
 	sheet.getRange(1, 1, summaryRows.length, 1).setValues(summaryRows).setFontWeight('bold');
 	
 	// Injection des données de logs après le résumé (+ 1 ligne vide)
@@ -328,7 +338,10 @@ function rechargerDonneesConventions()
 		}
 
 		const sourceDataRow = sourceSheet.getRange(2, 1, 1, sourceSheet.getLastColumn()).getValues()[0];
-		const isEmpty = sourceDataRow.every(cell => cell === '' || cell === null);
+		const isEmpty = sourceDataRow.every(cell =>
+		{
+			return cell === '' || cell === null;
+		});
 		
 		if (isEmpty)
 		{
