@@ -418,10 +418,9 @@ function importerDonneesPersonnes()
 				}
 			}
 		}
-		
+
 		console.log(`DEBUG: Fichier "${ssName}" terminé. Lignes ajoutées: ${rowsFoundInFile}`);
-		SpreadsheetApp.flush();
 	});
-	
+
 	console.info(`ℹ️ Fin de l'importation. Total de fichiers traités: ${fileCount}`);
 }
