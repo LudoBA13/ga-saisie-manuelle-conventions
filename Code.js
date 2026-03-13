@@ -4,7 +4,7 @@ function onOpen()
 {
 	SpreadsheetApp.getUi()
 		.createMenu('Conventions')
-		.addItem('Recharger les données des conventions', 'rechargerDonneesConventions')
+		.addItem('Importer données structures', 'rechargerDonneesConventions')
 		.addSeparator()
 		.addItem('Simuler la correction des erreurs (Dry Run)', 'dryRunFixClericalErrors')
 		.addItem('Appliquer la correction des erreurs', 'applyFixClericalErrors')
@@ -307,11 +307,11 @@ function createLogSheet(data, isDryRun, summary)
 function rechargerDonneesConventions()
 {
 	const activeSs = SpreadsheetApp.getActiveSpreadsheet();
-	const targetSheet = activeSs.getSheetByName('Data');
+	const targetSheet = activeSs.getSheetByName('Structures');
 
 	if (!targetSheet)
 	{
-		console.error("❌ Erreur : La feuille 'Data' n'existe pas.");
+		console.error("❌ Erreur : La feuille 'Structures' n'existe pas.");
 		return;
 	}
 
