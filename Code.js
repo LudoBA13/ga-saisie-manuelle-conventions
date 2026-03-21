@@ -65,7 +65,6 @@ const FIX_CONFIG = {
 			}
 
 			const originalStrValue = strValue;
-			let modified = false;
 
 			// Tentative de correction si le format est D/MYYYY ou DD/MMYYYY (manque le deuxième slash)
 			const dateRegex = /^([0-9]{1,2})\/([0-9]{1,2})([0-9]{4}|[0-9]{2})$/;
@@ -73,7 +72,6 @@ const FIX_CONFIG = {
 			if (match)
 			{
 				strValue = `${match[1]}/${match[2]}/${match[3]}`;
-				modified = true;
 			}
 
 			// Analyse de la date
@@ -109,14 +107,8 @@ const FIX_CONFIG = {
 			}
 
 			const formattedDate = Utilities.formatDate(date, Session.getScriptTimeZone(), 'dd/MM/yyyy');
-			
-			// Si la valeur a été reformattée ou corrigée
-			if (modified || formattedDate !== originalStrValue)
-			{
-				return { success: true, fixedValue: formattedDate, modified: true };
-			}
 
-			return { success: true, fixedValue: formattedDate, modified: false };
+			return { success: true, fixedValue: formattedDate, modified: (formattedDate !== originalStrValue) };
 		}
 	}
 };
