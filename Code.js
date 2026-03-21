@@ -16,35 +16,30 @@ function onOpen()
  * Configuration des corrections automatiques.
  * Chaque clé est une adresse de cellule (Feuille!A1).
  * Chaque valeur est un objet avec un nom et une fonction 'fixer'.
+ *
+ * @typedef {Object} FixResult
+ * @property {boolean} [success] Indique si la correction a réussi.
+ * @property {string} [fixedValue] La valeur corrigée.
+ * @property {boolean} [modified] Indique si la valeur a été modifiée.
+ * @property {string} [error] Message d'erreur si la correction a échoué.
+ *
+ * @type {Object<string, {name: string, fixer: (value: any, ss: GoogleAppsScript.Spreadsheet.Spreadsheet) => FixResult}>}
  */
 const FIX_CONFIG = {
 	'Saisie!C2': {
 		name: 'Numéro de convention',
-		fixer: (value) =>
+		fixer: (value, ss) =>
 		{
-			const strValue = String(value || '').trim();
-			if (strValue === '')
-			{
-				return { error: 'La valeur est vide.' };
-			}
+			let strValue = String(value || ss?.getName() || '').trim();
 
-			// Si c'est déjà un entier pur
-			if (/^\d+$/.test(strValue))
-			{
-				return { success: true, fixedValue: strValue, modified: false };
-			}
-
-			// Application de la regex RE2 : ^[Bb]*0*([1-9][0-9]+).* -> $1
-			const regex = /^[Bb]*0*([1-9][0-9]+).*/;
-			const match = strValue.match(regex);
+			const regexp = /^[Bb]*0*([1-9][0-9]*)/;
+			const match  = regexp.exec(strValue);
 
 			if (match && match[1])
 			{
-				const fixed = match[1];
-				if (/^\d+$/.test(fixed))
-				{
-					return { success: true, fixedValue: fixed, modified: true };
-				}
+				const fixedValue = match[1];
+
+				return { success: true, fixedValue: fixedValue, modified: (fixedValue !== strValue) };
 			}
 
 			return { error: `La valeur "${strValue}" ne correspond pas à un format d'entier valide.` };
@@ -52,7 +47,7 @@ const FIX_CONFIG = {
 	},
 	'Saisie!C72': {
 		name: 'Date de signature',
-		fixer: (value) =>
+		fixer: (value, ss) =>
 		{
 			let strValue;
 			if (value instanceof Date)
@@ -220,7 +215,7 @@ function processClericalErrors(isDryRun)
 			}
 
 			const oldValue = range.getValue();
-			const result = config.fixer(oldValue);
+			const result = config.fixer(oldValue, ss);
 
 			if (result.error)
 			{
