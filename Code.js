@@ -1,4 +1,5 @@
 const FOLDER_ID = '1WoTjgUiF4PjVQNBX6chRQzDFUP2f7k3a';
+const TARGET_HOUR = 9; // 9:00 AM corresponds to a .375 decimal part in Google Sheets
 
 function onOpen()
 {
@@ -13,13 +14,31 @@ function onOpen()
 }
 
 /**
+ * Normalizes a value if it's a Date by setting its time to 9:00 AM.
+ * This ensures the numeric value in Google Sheets ends with a .375 decimal part.
+ * 
+ * @param {any} value The value to normalize.
+ * @returns {any} The normalized value.
+ */
+function normalizeDate(value)
+{
+	if (value instanceof Date)
+	{
+		const normalized = new Date(value.getTime());
+		normalized.setHours(TARGET_HOUR, 0, 0, 0);
+		return normalized;
+	}
+	return value;
+}
+
+/**
  * Configuration for automatic corrections.
  * Each key is a cell address (Sheet!A1).
  * Each value is an object with a name and a 'fixer' function.
  *
  * @typedef {Object} FixResult
  * @property {boolean} [success] Indicates if the correction was successful.
- * @property {string} [fixedValue] The corrected value.
+ * @property {string|Date} [fixedValue] The corrected value.
  * @property {boolean} [modified] Indicates if the value was modified.
  * @property {string} [error] Error message if the correction failed.
  *
@@ -50,8 +69,13 @@ const FIX_CONFIG = {
 		fixer: (value, ss) =>
 		{
 			let strValue;
+			let originalIsDate = false;
+			let originalTimeCorrect = false;
+
 			if (value instanceof Date)
 			{
+				originalIsDate = true;
+				originalTimeCorrect = (value.getHours() === TARGET_HOUR && value.getMinutes() === 0 && value.getSeconds() === 0);
 				strValue = Utilities.formatDate(value, Session.getScriptTimeZone(), 'dd/MM/yyyy');
 			}
 			else
@@ -75,7 +99,6 @@ const FIX_CONFIG = {
 			}
 
 			// Date parsing
-			// Note: Google Apps Script / JS Date can be temperamental with the DD/MM/YYYY format.
 			const parts = strValue.split(/[\/\-\.]/);
 			if (parts.length !== 3)
 			{
@@ -91,7 +114,7 @@ const FIX_CONFIG = {
 				year += 2000;
 			}
 
-			const date = new Date(year, month, day);
+			const date = new Date(year, month, day, TARGET_HOUR, 0, 0, 0);
 			const now = new Date;
 			const minDate = new Date(2024, 0, 1);
 
@@ -107,8 +130,9 @@ const FIX_CONFIG = {
 			}
 
 			const formattedDate = Utilities.formatDate(date, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+			const modified = !originalIsDate || !originalTimeCorrect || (formattedDate !== originalStrValue);
 
-			return { success: true, fixedValue: formattedDate, modified: (formattedDate !== originalStrValue) };
+			return { success: true, fixedValue: date, modified: modified };
 		}
 	}
 };
@@ -217,7 +241,10 @@ function processClericalErrors(isDryRun)
 			else if (result.modified)
 			{
 				const actionLabel = isDryRun ? 'SIMULATION' : 'CORRECTION';
-				log(`${config.name} : ✅ ${actionLabel} de "${oldValue}" vers "${result.fixedValue}"`, 'INFO', ssName);
+				const oldDisplayValue = (oldValue instanceof Date) ? Utilities.formatDate(oldValue, Session.getScriptTimeZone(), 'dd/MM/yyyy') : oldValue;
+				const newDisplayValue = (result.fixedValue instanceof Date) ? Utilities.formatDate(result.fixedValue, Session.getScriptTimeZone(), 'dd/MM/yyyy') : result.fixedValue;
+				
+				log(`${config.name} : ✅ ${actionLabel} de "${oldDisplayValue}" vers "${newDisplayValue}"`, 'INFO', ssName);
 				if (!isDryRun)
 				{
 					range.setValue(result.fixedValue);
@@ -291,6 +318,7 @@ function createLogSheet(data, isDryRun, summary)
 
 /**
  * Collects structures data from individual files into the 'Structures' sheet.
+ * Normalizes dates to 9:00 AM (.375 decimal part).
  */
 function collectStructuresFromIndividualFiles()
 {
@@ -337,13 +365,17 @@ function collectStructuresFromIndividualFiles()
 			return;
 		}
 
-		targetSheet.appendRow(sourceDataRow);
+		// Normalize dates to 9:00 AM
+		const normalizedRow = sourceDataRow.map(normalizeDate);
+
+		targetSheet.appendRow(normalizedRow);
 		console.log(`✅ Données importées : ${ssName}`);
 	});
 }
 
 /**
  * Collects personnes data from individual files into the 'Personnes' sheet.
+ * Normalizes dates to 9:00 AM (.375 decimal part).
  */
 function collectPersonnesFromIndividualFiles()
 {
@@ -389,11 +421,15 @@ function collectPersonnesFromIndividualFiles()
 			if (prenomNom && String(prenomNom).trim() !== '')
 			{
 				const rowToAppend = [codeBA, nomPartenaire].concat(row);
-				console.log(`DEBUG: Tentative d'ajout pour "${prenomNom}" : ${JSON.stringify(rowToAppend)}`);
+				
+				// Normalize dates to 9:00 AM
+				const normalizedRowToAppend = rowToAppend.map(normalizeDate);
+
+				console.log(`DEBUG: Tentative d'ajout pour "${prenomNom}" : ${JSON.stringify(normalizedRowToAppend)}`);
 				
 				try
 				{
-					targetSheet.appendRow(rowToAppend);
+					targetSheet.appendRow(normalizedRowToAppend);
 					const lastRow = targetSheet.getLastRow();
 					console.info(`✅ Personne importée depuis ${ssName} : ${prenomNom} (Ajoutée à la ligne ${lastRow})`);
 					rowsFoundInFile++;
