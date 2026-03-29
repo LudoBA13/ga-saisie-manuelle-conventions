@@ -4,8 +4,8 @@ function onOpen()
 {
 	SpreadsheetApp.getUi()
 		.createMenu('Conventions')
-		.addItem('Importer les données Structures', 'rechargerDonneesConventions')
-		.addItem('Importer les données Personnes', 'importerDonneesPersonnes')
+		.addItem('Importer les données Structures', 'collectStructuresFromIndividualFiles')
+		.addItem('Importer les données Personnes', 'collectPersonnesFromIndividualFiles')
 		.addSeparator()
 		.addItem('Simuler la correction des erreurs (Dry Run)', 'dryRunFixClericalErrors')
 		.addItem('Appliquer la correction des erreurs', 'applyFixClericalErrors')
@@ -13,15 +13,15 @@ function onOpen()
 }
 
 /**
- * Configuration des corrections automatiques.
- * Chaque clé est une adresse de cellule (Feuille!A1).
- * Chaque valeur est un objet avec un nom et une fonction 'fixer'.
+ * Configuration for automatic corrections.
+ * Each key is a cell address (Sheet!A1).
+ * Each value is an object with a name and a 'fixer' function.
  *
  * @typedef {Object} FixResult
- * @property {boolean} [success] Indique si la correction a réussi.
- * @property {string} [fixedValue] La valeur corrigée.
- * @property {boolean} [modified] Indique si la valeur a été modifiée.
- * @property {string} [error] Message d'erreur si la correction a échoué.
+ * @property {boolean} [success] Indicates if the correction was successful.
+ * @property {string} [fixedValue] The corrected value.
+ * @property {boolean} [modified] Indicates if the value was modified.
+ * @property {string} [error] Error message if the correction failed.
  *
  * @type {Object<string, {name: string, fixer: (value: any, ss: GoogleAppsScript.Spreadsheet.Spreadsheet) => FixResult}>}
  */
@@ -66,7 +66,7 @@ const FIX_CONFIG = {
 
 			const originalStrValue = strValue;
 
-			// Tentative de correction si le format est D/MYYYY ou DD/MMYYYY (manque le deuxième slash)
+			// Attempt to correct if the format is D/MYYYY or DD/MMYYYY (missing the second slash)
 			const dateRegex = /^([0-9]{1,2})\/([0-9]{1,2})([0-9]{4}|[0-9]{2})$/;
 			const match = strValue.match(dateRegex);
 			if (match)
@@ -74,8 +74,8 @@ const FIX_CONFIG = {
 				strValue = `${match[1]}/${match[2]}/${match[3]}`;
 			}
 
-			// Analyse de la date
-			// Note: Google Apps Script / JS Date peut être capricieux avec le format DD/MM/YYYY.
+			// Date parsing
+			// Note: Google Apps Script / JS Date can be temperamental with the DD/MM/YYYY format.
 			const parts = strValue.split(/[\/\-\.]/);
 			if (parts.length !== 3)
 			{
@@ -95,7 +95,7 @@ const FIX_CONFIG = {
 			const now = new Date;
 			const minDate = new Date(2024, 0, 1);
 
-			// Vérification de la validité réelle de la date
+			// Verification of actual date validity
 			if (date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day)
 			{
 				return { error: `La date "${strValue}" est calendairement invalide.` };
@@ -114,7 +114,7 @@ const FIX_CONFIG = {
 };
 
 /**
- * Itère sur tous les Google Sheets d'un dossier et exécute un callback pour chacun.
+ * Iterates over all Google Sheets in a folder and executes a callback for each.
  */
 function forEachSpreadsheetInFolder(callback)
 {
@@ -160,8 +160,8 @@ function applyFixClericalErrors()
 }
 
 /**
- * Parcourt les fichiers et applique les corrections définies dans FIX_CONFIG.
- * @param {boolean} isDryRun Si vrai, ne modifie pas les fichiers.
+ * Iterates through files and applies the corrections defined in FIX_CONFIG.
+ * @param {boolean} isDryRun If true, does not modify files.
  */
 function processClericalErrors(isDryRun)
 {
@@ -246,7 +246,7 @@ Erreurs restantes : ${errorsUnfixable}`;
 }
 
 /**
- * Crée une feuille de logs dans le classeur actif.
+ * Creates a log sheet in the active spreadsheet.
  * @param {Array<Array<string>>} data
  * @param {boolean} isDryRun
  * @param {string} summary
@@ -260,24 +260,24 @@ function createLogSheet(data, isDryRun, summary)
 	
 	const sheet = ss.insertSheet(sheetName);
 	
-	// Préparation du résumé en haut
+	// Prepare the summary at the top
 	const summaryRows = summary.split('\n').map(line =>
 	{
 		return [line];
 	});
 	sheet.getRange(1, 1, summaryRows.length, 1).setValues(summaryRows).setFontWeight('bold');
 	
-	// Injection des données de logs après le résumé (+ 1 ligne vide)
+	// Inject log data after the summary (+ 1 empty line)
 	const startRow = summaryRows.length + 2;
 	const range = sheet.getRange(startRow, 1, data.length, data[0].length);
 	range.setValues(data);
 
-	// Mise en forme de l'en-tête du tableau
+	// Format the table header
 	sheet.getRange(startRow, 1, 1, data[0].length).setFontWeight('bold').setBackground('#f3f3f3');
 	sheet.setFrozenRows(startRow);
 	sheet.autoResizeColumns(1, data[0].length);
 
-	// Réduction de la taille de la feuille pour correspondre aux données
+	// Reduce sheet size to match data
 	const totalRowsUsed = startRow + data.length - 1;
 	if (sheet.getMaxRows() > totalRowsUsed)
 	{
@@ -290,9 +290,9 @@ function createLogSheet(data, isDryRun, summary)
 }
 
 /**
- * Recharge les données des conventions dans la feuille 'Data'.
+ * Collects structures data from individual files into the 'Structures' sheet.
  */
-function rechargerDonneesConventions()
+function collectStructuresFromIndividualFiles()
 {
 	const activeSs = SpreadsheetApp.getActiveSpreadsheet();
 	const targetSheet = activeSs.getSheetByName('Structures');
@@ -343,10 +343,9 @@ function rechargerDonneesConventions()
 }
 
 /**
- * Parcourt les fichiers, sélectionne les données de la feuille 'Interlocuteurs'
- * et les copie dans la feuille 'Structures' si 'Prénom Nom' est renseigné.
+ * Collects personnes data from individual files into the 'Personnes' sheet.
  */
-function importerDonneesPersonnes()
+function collectPersonnesFromIndividualFiles()
 {
 	const activeSs = SpreadsheetApp.getActiveSpreadsheet();
 	const targetSheet = activeSs.getSheetByName('Personnes');
@@ -376,7 +375,7 @@ function importerDonneesPersonnes()
 		const nomPartenaire = saisieSheet.getRange('C3').getValue();
 		console.log(`DEBUG: Code BA="${codeBA}", Partenaire="${nomPartenaire}"`);
 
-		// Lecture de la plage fixe B11:F26
+		// Reading fixed range B11:F26
 		const dataRange = saisieSheet.getRange('B11:F26');
 		const values = dataRange.getValues();
 		console.log(`DEBUG: Plage B11:F26 lue, nombre de lignes: ${values.length}`);
@@ -385,7 +384,7 @@ function importerDonneesPersonnes()
 		for (let i = 0; i < values.length; i++)
 		{
 			const row = values[i];
-			const prenomNom = row[1]; // L'index 1 correspond à la colonne C dans la plage B:F
+			const prenomNom = row[1]; // Index 1 corresponds to column C in range B:F
 
 			if (prenomNom && String(prenomNom).trim() !== '')
 			{
